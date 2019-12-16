@@ -11,7 +11,7 @@ import pickle
 import matplotlib.pyplot as plt
 
 # TODO: set path to the location to which CIFAR was extracted (where the file data_batch_1 is located)
-cifar_path = r'C:\Users\iTTaste\Desktop\Computer_Vision_Deep_Learning\cifar-10-batches-py'
+cifar_path = r'cifar-10-batches-py'
 
 def cull_unused_classes(x, y, used_labels):
     """
