@@ -11,8 +11,9 @@ import matplotlib.image as mpimg
 import time
 from tensorflow.keras import backend
 import cv2
+from tensorflow.keras.utils import plot_model
 
-train=True
+train=False
 data=dict()
 data["Dense"]=[]
 
@@ -24,12 +25,12 @@ class LossHistory(keras.callbacks.Callback):
         pass
 
     # def on_batch_begin(self,batch,logs={}):
-        
+
     #     """This function is executed before a new batch begin in this case after 32 trials
     #     batch: contains information about the batch
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
-        
+
     #     trial=logs["batch"]*logs["size"]
     #     #save the last layer activation (bis jetzt nur von plot_heatmap und plot_output_layer gebraucht)
     #     #inp=model.input
@@ -50,8 +51,8 @@ class LossHistory(keras.callbacks.Callback):
     #     for i in range(32):
     #         axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
     #     plt.show()
-        
-        
+
+
         #output_tmp=model.layers[13].output[-2:]
         #print(output_tmp)
         #data["Dense"].append(output_tmp)
@@ -149,18 +150,18 @@ if train:
     train_scores = model.evaluate(x_train, y_train, verbose=2)
     test_scores = model.evaluate(x_test, y_test, verbose=2)
 
-    np.save('cifar10Model'+str(test_scores[1])+'.npy',data)
+    #np.save('cifar10Model'+str(test_scores[1])+'.npy',data)
     model.save('cifar10Model'+str(test_scores[1])+'.h5')
     print("Finished training with {:4.1f}% training and {:4.1f}% testing accuracy"
             .format(train_scores[1] * 100, test_scores[1] * 100))
 
 else:
     #load model
-    model = load_model('cifar10Model0.6408.h5', custom_objects=None, compile=True)
+    model = load_model('cifar10Model0.6172.h5', custom_objects=None, compile=True)
     #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
 
 
-def plot_input_layer(model,x_test,y_test):
+def plot_input_layer_FeatureMaps(model,x_test,y_test):
     #predict model outputs
     predicts = model.predict(x_test[:4])
     print(np.argmax(predicts[0]), np.argmax(predicts[1]), np.argmax(predicts[2]), np.argmax(predicts[3]))
@@ -274,7 +275,7 @@ def plot_output_layer(model):
             activation["control_right"].append(d[i][context]["control_right"][-1][0])
             activation["novel_left"].append(d[i][context]["novel_left"][-1][0])
             activation["novel_right"].append(d[i][context]["novel_right"][-1][0])
-        
+
         if d[i]["activePhase"]=="acquisition":
             context_feedback(experimentalDesign["context"][0])
         elif d[i]["activePhase"]=="extinction":
@@ -310,11 +311,33 @@ def plot_output_layer(model):
     else:
         plt.show()
 
+def plot_input_layer_FilterWeigths(model,x_test,y_test):
+    # retrieve weights from the second hidden layer
+    filters, biases = model.layers[0].get_weights()
+    # normalize filter values to 0-1 so we can visualize them
+    f_min, f_max = filters.min(), filters.max()
+    filters = (filters - f_min) / (f_max - f_min)
+    print(len(filters))
+    # plot first few filters
+    n_filters = 32
+    fig, axis = plt.subplots(3,32,figsize=(15,15))
+    for i in range(3):
+        for j in range(32):
+            filt = filters[:,:,:,j]
+            axis[i][j].set_yticks([])
+            axis[i][j].set_xticks([])
+            axis[i][j].imshow(filt[:,:,i],cmap='gray')
 
 
 
 
-plot_input_layer(model,x_test,y_test)
+    # show the figure
+    plt.show()
+
+
+
+
+plot_input_layer_FilterWeigths(model,x_test,y_test)
+plot_input_layer_FeatureMaps(model,x_test,y_test)
 #plot_heatmap(model,class_names)
 #plot_output_layer()
-
