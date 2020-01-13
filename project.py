@@ -24,58 +24,13 @@ class LossHistory(keras.callbacks.Callback):
     def on_batch_end(self, batch, logs={}):
         pass
 
-    # def on_batch_begin(self,batch,logs={}):
-
+    def on_batch_begin(self,batch,logs={}):
     #     """This function is executed before a new batch begin in this case after 32 trials
     #     batch: contains information about the batch
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
+        pass
 
-    #     trial=logs["batch"]*logs["size"]
-    #     #save the last layer activation (bis jetzt nur von plot_heatmap und plot_output_layer gebraucht)
-    #     #inp=model.input
-    #     outputs=[]
-    #     layer_outputs=model.layers[13].output
-    #     activation_model = models.Model(inputs=model.input, outputs=layer_outputs)
-    #     #predicts = model.predict(x_test[:4])
-    #     activations = activation_model.predict(x_test[:4])
-    #     first_layer_activation = activations[0]
-    #     print(first_layer_activation.shape)
-
-    #     #plot every neuron activation
-    #     fig, axs = plt.subplots(4,8, figsize=(15, 6), facecolor='w', edgecolor='k')
-    #     fig.subplots_adjust(hspace = .5, wspace=.001)
-
-    #     axs = axs.ravel()
-
-    #     for i in range(32):
-    #         axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
-    #     plt.show()
-
-
-        #output_tmp=model.layers[13].output[-2:]
-        #print(output_tmp)
-        #data["Dense"].append(output_tmp)
-        ##print(output_tmp.shape)
-        #np.save("t.npy",data["Dense"])
-        #input("sds")
-        """for i, layer in enumerate(model.layers):
-            if i > 0:
-                outputs.append(layer.output)
-        functor = backend.function([inp]+[backend.learning_phase()],outputs)
-        layer_activation=dict()
-        for name in class_names:
-            observation=cv2.resize(x_test[trial],dsize=(32,32))
-            layer_activation[name]=functor([[[observation]],1.])[-2:]"""
-        #for color in rlAgent.OAIInterface.modules['worldModule'].imagesSymbols:
-            #layer_activation[color]=dict()
-            #for stim in rlAgent.experimentalDesign["Stimulus"]:
-                #observation=cv2.resize(rlAgent.OAIInterface.modules['worldModule'].imagesSymbols[color][rlAgent.experimentalDesign["Stimulus"][stim].split(".")[0]],dsize=(32,32))
-                #observation.astype('float32')
-                #observation=observation/255.0
-                #layer_activation[color][stim]=functor([[[observation]],1.])[-2:]
-        #layer_activation=functor([[[observation]],1.])[-2:]
-        #rlAgent.OAIInterface.data.append(layer_activation)
 
 def normalize_data(x_train, x_test):
     # Convert to float32
@@ -188,129 +143,6 @@ def plot_input_layer_FeatureMaps(model,x_test,y_test):
     plt.show()
 
 
-def plot_heatmap(model, class_names):
-    """this function plots the neuronal activation of the Dense layer
-    model: contains network architecture and its learned parameters
-    """
-    activation_map=dict()
-    for name in class_names:
-        activation_map[name]=[]
-    activation_map["frog"]=data["frog"]
-
-    plt.imshow(activation_map["frog"], cmap='plasma', interpolation='nearest')
-    plt.show()
-
-    """#go through the session
-    while d[i]["session"]==session_wanted:
-        def context_feedback(context):
-            activation_map["control_left"].append(d[i][context]["control_left"][-2][0])
-            activation_map["control_right"].append(d[i][context]["control_right"][-2][0])
-            activation_map["novel_left"].append(d[i][context]["novel_left"][-2][0])
-            activation_map["novel_right"].append(d[i][context]["novel_right"][-2][0])
-
-        if d[i]["activePhase"]=="acquisition":
-            context_feedback(experimentalDesign["context"][0])
-        elif d[i]["activePhase"]=="extinction":
-            context_feedback(experimentalDesign["context"][1])
-        else:
-            context_feedback(experimentalDesign["context"][2])
-
-        #when the last trial of the experiment is reached end this loop
-        if d[i]["index"]==d[-1]["index"]:
-            break
-        i+=1
-
-    for key in activation_map.keys():
-        activation_map[key]=np.swapaxes(np.array(activation_map[key]),0,1)
-
-    fig=plt.figure(figsize=(20,8))
-    plt.suptitle("Q-activation")
-
-    #plot the activation map for all 4 Stimuli in this Session
-    for i,stim in enumerate(activation_map.keys()):
-        plt.subplot("41%i"%i)
-        plt.title(stim)
-        plt.imshow(activation_map[stim], cmap='plasma', interpolation='nearest')
-        plt.gca().invert_yaxis()
-        plt.yticks(np.arange(0,64,25),[0,25,50])
-        plt.xscale('linear')
-        plt.ylabel("neuron")
-        plt.xlabel("trial")
-        plt.colorbar()
-    plt.tight_layout()
-
-    if save_folder is not None:
-        plt.savefig(save_folder+"/qvalue_heatmap_session_%i.png"%session_wanted,dpi=200)
-        plt.close()
-    else:
-        plt.show()"""
-
-
-def plot_output_layer(model):
-    """this function plots the neuronal activation of the output layer
-    model: contains network architecture and its learned parameters
-    """
-    d=data["data"]
-    #iterate to the session we want the output from
-    i=0
-    while d[i]["session"]!=session_wanted:
-        i+=1
-
-    activation={"control_left":[],"control_right":[],"novel_left":[],"novel_right":[]}
-
-    acquisition_len=0
-    extinction_len=0
-
-    #go through the session
-    while d[i]["session"]==session_wanted:
-        #get the lenght of the Phases to plot a line between them
-        if d[i]["activePhase"]=="acquisition":
-            acquisition_len+=1
-        if d[i]["activePhase"]=="extinction":
-            extinction_len+=1
-
-        #iterate over the data to get the output-layer activation for each stimuli and the right Phase
-        def context_feedback(context):
-            activation["control_left"].append(d[i][context]["control_left"][-1][0])
-            activation["control_right"].append(d[i][context]["control_right"][-1][0])
-            activation["novel_left"].append(d[i][context]["novel_left"][-1][0])
-            activation["novel_right"].append(d[i][context]["novel_right"][-1][0])
-
-        if d[i]["activePhase"]=="acquisition":
-            context_feedback(experimentalDesign["context"][0])
-        elif d[i]["activePhase"]=="extinction":
-            context_feedback(experimentalDesign["context"][1])
-        else:
-            context_feedback(experimentalDesign["context"][2])
-
-        #when the last trial of the experiment is reached end this loop
-        if d[i]["index"]==d[-1]["index"]:
-            break
-        i+=1
-
-
-    fig=plt.figure(figsize=(20,8))
-    #plt.title("Q-activation-Output")
-
-    for i,stim in enumerate(activation.keys()):
-        plt.subplot("41%i"%i)
-        plt.title(stim)
-        plt.plot(activation[stim])
-        plt.plot([acquisition_len,acquisition_len],[-1.5,1.5],'black')
-        plt.plot([acquisition_len+extinction_len,acquisition_len+extinction_len],[-1.5,1.5],'black')
-        plt.xlabel("trial")
-        plt.ylabel("neuron")
-        plt.ylim(-1.5,1.5)
-    plt.tight_layout()
-
-
-    #save the plot
-    if save_folder is not None:
-        plt.savefig(save_folder+"/qvalue_output_session_%i.png"%(session_wanted),dpi=200)
-        plt.close()
-    else:
-        plt.show()
-
 def plot_input_layer_FilterWeigths(model,x_test,y_test):
     # retrieve weights from the second hidden layer
     filters, biases = model.layers[0].get_weights()
@@ -339,5 +171,3 @@ def plot_input_layer_FilterWeigths(model,x_test,y_test):
 
 plot_input_layer_FilterWeigths(model,x_test,y_test)
 plot_input_layer_FeatureMaps(model,x_test,y_test)
-#plot_heatmap(model,class_names)
-#plot_output_layer()
