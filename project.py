@@ -12,23 +12,113 @@ import time
 from tensorflow.keras import backend
 import cv2
 from tensorflow.keras.utils import plot_model
+import os
 
-train=False
-data=dict()
-data["Dense"]=[]
+train=True
+
+
+class create_Video():
+    """this class helps to store data as image and later as video
+    """
+    def __init__(self):
+        self.videos=dict()
+        
+    def create_Videos(self):
+        """
+        creates the Videos from all stored frames after the training
+        """
+        for vid in self.videos:
+            height, width, layers = self.videos[vid][0].shape
+            size = (width,height)
+            video_name=vid+".avi"
+            out = cv2.VideoWriter(video_name,cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
+            for i in range(len(self.videos[vid])):
+                print(i)
+                out.write(self.videos[vid][i])
+            out.release()
+
+    def store_Frame_to_Video(self,fig, name_of_video="name"):
+        """
+        stores figures into a list
+        fig: figure to store
+        name_of_video: name of the video
+        """
+        #store the figure(frames) as image
+        fig.canvas.draw()
+        img=np.frombuffer(fig.canvas.tostring_rgb(),dtype=np.uint8)
+        img=img.reshape(fig.canvas.get_width_height()[::-1]+(3,))
+        img=cv2.cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
+        #add to list of queue for images (to receive video in the end wwith help of create_Videos function)
+        if name_of_video not in self.videos:
+            self.videos[name_of_video]=[]
+            print("created list")
+        print(len(self.videos[name_of_video]))
+        self.videos[name_of_video].append(img)
+
+
+def plot_input_layer_FilterWeigths(model,x_test,y_test):
+    # retrieve weights from the second hidden layer
+    filters, biases = model.layers[0].get_weights()
+    # normalize filter values to 0-1 so we can visualize them
+    f_min, f_max = filters.min(), filters.max()
+    filters = (filters - f_min) / (f_max - f_min)
+    # plot first few filters
+    n_filters = 32
+    fig, axis = plt.subplots(3,32,figsize=(10,1))
+    
+    for i in range(3):
+        for j in range(32):
+            filt = filters[:,:,:,j]
+            axis[i][j].set_yticks([])
+            axis[i][j].set_xticks([])
+            axis[i][j].imshow(filt[:,:,i],cmap='gray')
+
+    #store the filters as image
+    video_store.store_Frame_to_Video(fig,"Filter")
+    # show the figure
+    #plt.show()
+    #free memory
+    plt.close(fig)
+    
+
+def plot_input_layer_FeatureMaps(model,x_test,y_test):
+    #predict model outputs
+    predicts = model.predict(x_test[:4])
+    print(np.argmax(predicts[0]), np.argmax(predicts[1]), np.argmax(predicts[2]), np.argmax(predicts[3]))
+    print(y_test[:4])
+
+    #get wanted outputs
+    layer_outputs = model.layers[0].output#[layer.output for layer in model.layers[:2]]
+    activation_model = models.Model(inputs=model.input, outputs=layer_outputs) # Creates a model that will return these outputs, given the model input
+
+    activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
+
+    #get a layer activation for a picture
+    first_layer_activation = activations[0]
+    print(first_layer_activation.shape)
+
+    #plot every neuron activation
+    fig, axs = plt.subplots(3,1, """figsize=(15, 6), facecolor='w', edgecolor='k'""")
+    fig.subplots_adjust(hspace = .5, wspace=.001)
+    axs = axs.ravel()
+
+    for i in range(32):
+        axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
+    plt.show()
+
 
 class LossHistory(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
         pass
 
     def on_batch_end(self, batch, logs={}):
-        pass
-
-    def on_batch_begin(self,batch,logs={}):
-    #     """This function is executed before a new batch begin in this case after 32 trials
+    #     """This function is executed after a new batch begin in this case after 32 trials
     #     batch: contains information about the batch
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
+        plot_input_layer_FilterWeigths(model,x_test,y_test)
+
+    def on_batch_begin(self,batch,logs={}):
         pass
 
 
@@ -50,8 +140,10 @@ def normalize_data(x_train, x_test):
     return x_train, x_test
 
 
-###create the network###
+#create Video storage class
+video_store=create_Video()
 
+###create the network###
 used_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 training_size = 50000
 test_size = 10000
@@ -116,58 +208,7 @@ else:
     #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
 
 
-def plot_input_layer_FeatureMaps(model,x_test,y_test):
-    #predict model outputs
-    predicts = model.predict(x_test[:4])
-    print(np.argmax(predicts[0]), np.argmax(predicts[1]), np.argmax(predicts[2]), np.argmax(predicts[3]))
-    print(y_test[:4])
 
-    #get wanted outputs
-    layer_outputs = model.layers[0].output#[layer.output for layer in model.layers[:2]]
-    activation_model = models.Model(inputs=model.input, outputs=layer_outputs) # Creates a model that will return these outputs, given the model input
-
-    activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
-
-    #get a layer activation for a picture
-    first_layer_activation = activations[0]
-    print(first_layer_activation.shape)
-
-    #plot every neuron activation
-    fig, axs = plt.subplots(4,8, figsize=(15, 6), facecolor='w', edgecolor='k')
-    fig.subplots_adjust(hspace = .5, wspace=.001)
-
-    axs = axs.ravel()
-
-    for i in range(32):
-        axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
-    plt.show()
-
-
-def plot_input_layer_FilterWeigths(model,x_test,y_test):
-    # retrieve weights from the second hidden layer
-    filters, biases = model.layers[0].get_weights()
-    # normalize filter values to 0-1 so we can visualize them
-    f_min, f_max = filters.min(), filters.max()
-    filters = (filters - f_min) / (f_max - f_min)
-    print(len(filters))
-    # plot first few filters
-    n_filters = 32
-    fig, axis = plt.subplots(3,32,figsize=(15,15))
-    for i in range(3):
-        for j in range(32):
-            filt = filters[:,:,:,j]
-            axis[i][j].set_yticks([])
-            axis[i][j].set_xticks([])
-            axis[i][j].imshow(filt[:,:,i],cmap='gray')
-
-
-
-
-    # show the figure
-    plt.show()
-
-
-
-
-plot_input_layer_FilterWeigths(model,x_test,y_test)
-plot_input_layer_FeatureMaps(model,x_test,y_test)
+video_store.create_Videos()
+#plot_input_layer_FilterWeigths(model,x_test,y_test)
+#plot_input_layer_FeatureMaps(model,x_test,y_test)
