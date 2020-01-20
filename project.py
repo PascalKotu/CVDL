@@ -14,7 +14,7 @@ import cv2
 from tensorflow.keras.utils import plot_model
 import os
 
-train=True
+train=False
 
 
 class create_Video():
@@ -22,7 +22,7 @@ class create_Video():
     """
     def __init__(self):
         self.videos=dict()
-        
+
     def create_Videos(self):
         """
         creates the Videos from all stored frames after the training
@@ -65,7 +65,7 @@ def plot_input_layer_FilterWeigths(model,x_test,y_test):
     # plot first few filters
     n_filters = 32
     fig, axis = plt.subplots(3,32,figsize=(10,1))
-    
+
     for i in range(3):
         for j in range(32):
             filt = filters[:,:,:,j]
@@ -79,7 +79,7 @@ def plot_input_layer_FilterWeigths(model,x_test,y_test):
     #plt.show()
     #free memory
     plt.close(fig)
-    
+
 
 def plot_input_layer_FeatureMaps(model,x_test,y_test):
     #predict model outputs
@@ -106,6 +106,26 @@ def plot_input_layer_FeatureMaps(model,x_test,y_test):
         axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
     plt.show()
 
+def plot_Denselayer_Euclidean_Distances(model,x_test,y_test):
+    layer_outputs = model.get_layer("dense_one")
+    activation_model = models.Model(inputs=model.input, outputs=layer_outputs.output) # Creates a model that will return these outputs, given the model input
+
+    activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
+
+    #move
+    #zoom in on a picture to 20x20 and then move it up and down
+
+    #zoom
+    #start with the full image and zoom in
+
+    #rotate
+    #straight forward
+
+    #get a layer activation for a picture
+    first_layer_activation = activations[0]
+    print(first_layer_activation)
+    print(first_layer_activation.shape)
+    #np.linalg.norm(a-b)
 
 class LossHistory(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
@@ -116,8 +136,8 @@ class LossHistory(keras.callbacks.Callback):
     #     batch: contains information about the batch
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
-        plot_input_layer_FilterWeigths(model,x_test,y_test)
-
+        #plot_input_layer_FilterWeigths(model,x_test,y_test)
+        pass
     def on_batch_begin(self,batch,logs={}):
         pass
 
@@ -178,7 +198,13 @@ if train:
     model.add(Dropout(0.25))
 
     model.add(Flatten())
-    model.add(Dense(512, activation='relu'))
+    model.add(Dense(512, activation='relu', name="dense_one"))
+    model.add(Dropout(0.25))
+    model.add(Dense(512, activation='relu', name="dense_two"))
+    model.add(Dropout(0.25))
+    model.add(Dense(512, activation='relu', name="dense_three"))
+    model.add(Dropout(0.25))
+    model.add(Dense(512, activation='relu', name="dense_four"))
     model.add(Dropout(0.25))
     model.add(Dense(10, activation='softmax'))
 
@@ -204,11 +230,11 @@ if train:
 
 else:
     #load model
-    model = load_model('cifar10Model0.6172.h5', custom_objects=None, compile=True)
+    model = load_model('cifar10Model0.5274.h5', custom_objects=None, compile=True)
     #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
 
 
 
-video_store.create_Videos()
+#video_store.create_Videos()
 #plot_input_layer_FilterWeigths(model,x_test,y_test)
-#plot_input_layer_FeatureMaps(model,x_test,y_test)
+plot_Denselayer_Euclidean_Distances(model,x_test,y_test)
