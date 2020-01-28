@@ -13,8 +13,10 @@ from tensorflow.keras import backend
 import cv2
 from tensorflow.keras.utils import plot_model
 import os
+from imagesUtil import getThreeTransformationsImages
 
-train=False
+
+train=True
 
 
 class create_Video():
@@ -22,6 +24,7 @@ class create_Video():
     """
     def __init__(self):
         self.videos=dict()
+        self.imageCount = 0
 
     def create_Videos(self):
         """
@@ -98,34 +101,120 @@ def plot_input_layer_FeatureMaps(model,x_test,y_test):
     print(first_layer_activation.shape)
 
     #plot every neuron activation
-    fig, axs = plt.subplots(3,1, """figsize=(15, 6), facecolor='w', edgecolor='k'""")
-    fig.subplots_adjust(hspace = .5, wspace=.001)
+    fig, axs = plt.subplots(8, 4, figsize=(15, 6), facecolor='w', edgecolor='k')
+    #fig.subplots_adjust(hspace = .5, wspace=.001)
     axs = axs.ravel()
 
     for i in range(32):
         axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
+        axs[i].set_yticks([])
+        axs[i].set_xticks([])
     plt.show()
 
-def plot_Denselayer_Euclidean_Distances(model,x_test,y_test):
-    layer_outputs = model.get_layer("dense_one")
-    activation_model = models.Model(inputs=model.input, outputs=layer_outputs.output) # Creates a model that will return these outputs, given the model input
+def get_transformed_Images(x_test):
+    '''
+    Arguments: takes the test image array
 
-    activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
+    returns: returns an array with 3*9 images for base image 1
+             and 3*9 for image 2 and 3*9 for image 3
+    '''
+    #create the array with the transformed pictures
+    pictures = []
+    for x in range(3):
+        (h, w) = x_test[x].shape[:2]
+        #append the base picture for rotation
+        pictures.append(x_test[x])
+        #then append the 8 rotations
+        for i in range(8):
+            center = (w / 2, h / 2)
 
-    #move
-    #zoom in on a picture to 20x20 and then move it up and down
+            M = cv2.getRotationMatrix2D(center, (i+1)*45, 1.0)
+            rotated = cv2.warpAffine(x_test[x], M, (w, h))
+            pictures.append(rotated)
+        #append base picture for zooming
+        pictures.append(x_test[x])
+        #append the 8 zoom pictures
+        for i in range(8):
+            cropped = x_test[x,(i+1):h-(i+1), (i+1):w-(i+1)]
+            cropped = cv2.resize(cropped, (w, h), interpolation = cv2.INTER_AREA)
+            pictures.append(cropped)
+        #append the base picture and the additional 8 for movement
+        for i in range(9):
+            cropped = x_test[x,(i):(i+24), 3:28]
+            cropped = cv2.resize(cropped, (w, h), interpolation = cv2.INTER_AREA)
+            pictures.append(cropped)
 
-    #zoom
-    #start with the full image and zoom in
+    #convert the list into an array
+    pictures = np.asarray(pictures)
 
-    #rotate
-    #straight forward
+    #plot the pictures
+    #fig, axs = plt.subplots(9,9,figsize=(10,10))
+    #axs = axs.ravel()
 
-    #get a layer activation for a picture
-    first_layer_activation = activations[0]
-    print(first_layer_activation)
-    print(first_layer_activation.shape)
-    #np.linalg.norm(a-b)
+    #for i in range(81):
+    #    axs[i].imshow(pictures[i], cmap='hsv',interpolation='none')
+    #    axs[i].set_yticks([])
+    #    axs[i].set_xticks([])
+    #plt.show()
+    return pictures
+
+def plot_Denselayer_Euclidean_Distances(model,transformedImages):
+    #video_store.imageCount += 1
+    if video_store.imageCount == 0:
+        fig, axs = plt.subplots(4,3, figsize=(20,10))
+        layerNames = ["dense_one", "dense_two", "dense_three", "dense_four"]
+        for x in range(4):
+            layer_outputs = model.get_layer(layerNames[x])
+            activation_model = models.Model(inputs=model.input, outputs=layer_outputs.output)
+            activations = activation_model.predict(transformedImages)
+            rotationDistance = []
+            zoomDistance = []
+            movementDistance = []
+            for i in range (9):
+                rotationDistance.append(np.linalg.norm(activations[0]-activations[i+0]))
+                zoomDistance.append(np.linalg.norm(activations[9]-activations[i+9]))
+                movementDistance.append(np.linalg.norm(activations[18]-activations[i+18]))
+
+            for i in range (9):
+                rotationDistance.append(np.linalg.norm(activations[27]-activations[i+27]))
+                zoomDistance.append(np.linalg.norm(activations[36]-activations[i+36]))
+                movementDistance.append(np.linalg.norm(activations[45]-activations[i+45]))
+
+            for i in range (9):
+                rotationDistance.append(np.linalg.norm(activations[54]-activations[i+54]))
+                zoomDistance.append(np.linalg.norm(activations[63]-activations[i+63]))
+                movementDistance.append(np.linalg.norm(activations[72]-activations[i+72]))
+
+            axs[x][0].plot(rotationDistance[0:9], label='Picture 1')
+            axs[x][0].plot(rotationDistance[9:18], label='Picture 2')
+            axs[x][0].plot(rotationDistance[18:27], label='Picture 3')
+            #axs[x][0].legend()
+            axs[x][0].set_title('Denselayer = '+ str(x)+' , Transormation = Rotation')
+            if x < 3:
+                axs[x][0].set_xticks([])
+            axs[3][0].set_xticklabels(['-45','0', '45', '90', '135', '180', '225', '270', '315', '360'])
+
+            axs[x][1].plot(zoomDistance[0:9], label='Picture 1')
+            axs[x][1].plot(zoomDistance[9:18], label='Picture 2')
+            axs[x][1].plot(zoomDistance[18:27], label='Picture 3')
+            #axs[x][1].legend()
+            axs[x][1].set_title('Denselayer = '+ str(x)+' , Transormation = Scaling')
+            if x < 3:
+                axs[x][1].set_xticks([])
+
+            axs[x][2].plot(movementDistance[0:9], label='Picture 1')
+            axs[x][2].plot(movementDistance[9:18], label='Picture 2')
+            axs[x][2].plot(movementDistance[18:27], label='Picture 3')
+            #axs[x][2].legend()
+            axs[x][2].set_title('Denselayer = '+ str(x)+' , Transormation = Moving')
+            if x < 3:
+                axs[x][2].set_xticks([])
+
+
+        video_store.store_Frame_to_Video(fig,"distances")
+        video_store.imageCount = 0
+        #plt.show()
+        plt.close(fig)
 
 class LossHistory(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
@@ -137,7 +226,8 @@ class LossHistory(keras.callbacks.Callback):
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
         #plot_input_layer_FilterWeigths(model,x_test,y_test)
-        pass
+        plot_input_layer_FeatureMaps(model,x_test,y_test)
+
     def on_batch_begin(self,batch,logs={}):
         pass
 
@@ -179,6 +269,24 @@ x_train = x_train.reshape(training_size,32,32,3)
 x_test = x_test.reshape(test_size,32,32,3)
 
 #create model
+transformedImages = get_transformed_Images(x_test)
+a, b ,c = getThreeTransformationsImages(transformedImages)
+#plot the pictures
+fig, axs = plt.subplots(3,figsize=(10,10))
+axs = axs.ravel()
+
+axs[0].imshow(a,interpolation='none')
+axs[0].set_yticks([])
+axs[0].set_xticks([])
+axs[1].imshow(b, cmap='hsv')
+axs[1].set_yticks([])
+axs[1].set_xticks([])
+axs[2].imshow(c, cmap='hsv')
+axs[2].set_yticks([])
+axs[2].set_xticks([])
+plt.show()
+
+
 model = Sequential()
 if train:
     #add model layers
@@ -235,6 +343,5 @@ else:
 
 
 
-#video_store.create_Videos()
+video_store.create_Videos()
 #plot_input_layer_FilterWeigths(model,x_test,y_test)
-plot_Denselayer_Euclidean_Distances(model,x_test,y_test)
