@@ -60,56 +60,66 @@ class create_Video():
 
 
 def plot_input_layer_FilterWeigths(model,x_test,y_test):
-    # retrieve weights from the second hidden layer
-    filters, biases = model.layers[0].get_weights()
-    # normalize filter values to 0-1 so we can visualize them
-    f_min, f_max = filters.min(), filters.max()
-    filters = (filters - f_min) / (f_max - f_min)
-    # plot first few filters
-    n_filters = 32
-    fig, axis = plt.subplots(3,32,figsize=(10,1))
+    video_store.imageCount += 1
+    if video_store.imageCount == 20:
+        # retrieve weights from the second hidden layer
+        filters, biases = model.layers[0].get_weights()
+        # normalize filter values to 0-1 so we can visualize them
+        f_min, f_max = filters.min(), filters.max()
+        filters = (filters - f_min) / (f_max - f_min)
+        # plot first few filters
 
-    for i in range(3):
-        for j in range(32):
-            filt = filters[:,:,:,j]
-            axis[i][j].set_yticks([])
-            axis[i][j].set_xticks([])
-            axis[i][j].imshow(filt[:,:,i],cmap='gray')
+        n_filters = 32
+        fig, axis = plt.subplots(6,16,figsize=(8,3))
+        for i in range(3):
+            for j in range(32):
+                filt = filters[:,:,:,j]
+                if j > 15:
+                    axis[2*i+1][j-16].set_yticks([])
+                    axis[2*i+1][j-16].set_xticks([])
+                    axis[2*i+1][j-16].imshow(filt[:,:,i],cmap='gray')
+                else:
+                    axis[2*i][j].set_yticks([])
+                    axis[2*i][j].set_xticks([])
+                    axis[2*i][j].imshow(filt[:,:,i],cmap='gray')
 
-    #store the filters as image
-    video_store.store_Frame_to_Video(fig,"Filter")
-    # show the figure
-    #plt.show()
-    #free memory
-    plt.close(fig)
+        #store the filters as image
+        video_store.store_Frame_to_Video(fig,"Filter")
+        # show the figure
+        plt.show()
+        #free memory
+        video_store.imageCount = 0
+        plt.close(fig)
 
 
 def plot_input_layer_FeatureMaps(model,x_test,y_test):
-    #predict model outputs
-    predicts = model.predict(x_test[:4])
-    print(np.argmax(predicts[0]), np.argmax(predicts[1]), np.argmax(predicts[2]), np.argmax(predicts[3]))
-    print(y_test[:4])
+    video_store.imageCount += 1
+    if video_store.imageCount == 20:
 
-    #get wanted outputs
-    layer_outputs = model.layers[0].output#[layer.output for layer in model.layers[:2]]
-    activation_model = models.Model(inputs=model.input, outputs=layer_outputs) # Creates a model that will return these outputs, given the model input
 
-    activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
+        #get wanted outputs
+        layer_outputs = model.layers[9].output#[layer.output for layer in model.layers[:2]]
+        activation_model = models.Model(inputs=model.input, outputs=layer_outputs) # Creates a model that will return these outputs, given the model input
 
-    #get a layer activation for a picture
-    first_layer_activation = activations[0]
-    print(first_layer_activation.shape)
+        activations = activation_model.predict(x_test[:4]) # Returns a list of five Numpy arrays: one array per layer activation
 
-    #plot every neuron activation
-    fig, axs = plt.subplots(8, 4, figsize=(15, 6), facecolor='w', edgecolor='k')
-    #fig.subplots_adjust(hspace = .5, wspace=.001)
-    axs = axs.ravel()
+        #get a layer activation for a picture
+        first_layer_activation = activations[0]
+        print(first_layer_activation.shape)
 
-    for i in range(32):
-        axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
-        axs[i].set_yticks([])
-        axs[i].set_xticks([])
-    plt.show()
+        #plot every neuron activation
+        fig, axs = plt.subplots(4, 8, figsize=(8, 4), facecolor='w', edgecolor='k')
+        #fig.subplots_adjust(hspace = .5, wspace=.001)
+        axs = axs.ravel()
+
+        for i in range(32):
+            axs[i].matshow(first_layer_activation[:, :, i], cmap='viridis')
+            axs[i].set_yticks([])
+            axs[i].set_xticks([])
+        video_store.store_Frame_to_Video(fig,"featuremaps")
+        video_store.imageCount = 0
+        #plt.show()
+        plt.close(fig)
 
 def get_transformed_Images(x_test):
     '''
@@ -272,6 +282,7 @@ x_test = x_test.reshape(test_size,32,32,3)
 transformedImages = get_transformed_Images(x_test)
 a, b ,c = getThreeTransformationsImages(transformedImages)
 #plot the pictures
+"""
 fig, axs = plt.subplots(3,figsize=(10,10))
 axs = axs.ravel()
 
@@ -284,8 +295,8 @@ axs[1].set_xticks([])
 axs[2].imshow(c, cmap='hsv')
 axs[2].set_yticks([])
 axs[2].set_xticks([])
-plt.show()
-
+#plt.show()
+"""
 
 model = Sequential()
 if train:
@@ -338,10 +349,9 @@ if train:
 
 else:
     #load model
-    model = load_model('cifar10Model0.5274.h5', custom_objects=None, compile=True)
+    model = load_model('cifar10Model0.6043.h5', custom_objects=None, compile=True)
     #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
 
-
-
+print(model.summary())
 video_store.create_Videos()
 #plot_input_layer_FilterWeigths(model,x_test,y_test)
