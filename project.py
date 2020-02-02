@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import models
 from tensorflow.keras.models import Sequential, load_model
@@ -14,6 +15,9 @@ import cv2
 from tensorflow.keras.utils import plot_model
 import os
 from imagesUtil import getThreeTransformationsImages
+import random
+from datetime import datetime
+from vis.visualization import visualize_saliency
 
 
 train=True
@@ -36,7 +40,6 @@ class create_Video():
             video_name=vid+".avi"
             out = cv2.VideoWriter(video_name,cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
             for i in range(len(self.videos[vid])):
-                print(i)
                 out.write(self.videos[vid][i])
             out.release()
 
@@ -55,7 +58,7 @@ class create_Video():
         if name_of_video not in self.videos:
             self.videos[name_of_video]=[]
             print("created list")
-        print(len(self.videos[name_of_video]))
+        #print(len(self.videos[name_of_video]))
         self.videos[name_of_video].append(img)
 
 
@@ -105,7 +108,7 @@ def plot_input_layer_FeatureMaps(model,x_test,y_test):
 
         #get a layer activation for a picture
         first_layer_activation = activations[0]
-        print(first_layer_activation.shape)
+        #print(first_layer_activation.shape)
 
         #plot every neuron activation
         fig, axs = plt.subplots(4, 8, figsize=(8, 4), facecolor='w', edgecolor='k')
@@ -227,6 +230,14 @@ def plot_Denselayer_Euclidean_Distances(model,transformedImages):
         plt.close(fig)
 
 class LossHistory(keras.callbacks.Callback):
+    def __init__(self):
+        x_train, y_train, x_test, y_test, class_names = get_dataset( 'cifar10', used_labels, training_size, test_size )
+
+        #pick a random image for the calculation of the sensitivity maps
+        #this is done after every epoch
+        self.imageIndex = random.randint(0, len(x_test))
+        self.obs_input = x_test[self.imageIndex]
+
     def on_train_begin(self, logs={}):
         pass
 
@@ -235,11 +246,114 @@ class LossHistory(keras.callbacks.Callback):
     #     batch: contains information about the batch
     #     logs: logs are stored here if wanted, currently batchsize and iteration number of batch are stored
     #     """
+    
         #plot_input_layer_FilterWeigths(model,x_test,y_test)
         plot_input_layer_FeatureMaps(model,x_test,y_test)
 
     def on_batch_begin(self,batch,logs={}):
         pass
+
+
+    #performs the smoothGrad routine.
+    #unfortunately, this takes quite a lot of time
+    #using fewer reps speeds up the process drastically but makes the smoothening less effective
+    def on_epoch_end(self, epoch, logs={}):
+
+        enableSmoothGrad = True
+
+        if enableSmoothGrad:
+        
+            #print information about the input image
+            #these are not necessary but can be helpful
+            if epoch == 0:
+                plt.imshow(self.obs_input.astype('uint8'))
+                plt.savefig('inputImage.png')
+                print('\n')
+                print(class_names[y_test[self.imageIndex]])
+                print('image index = ' + str(self.imageIndex))
+
+            #this determines how many noisy images are used for the smoothening process
+            reps = 25
+
+            #the layer to visualize
+            vis_layer = 20
+
+            #initial noise level
+            noiseLevel = 0
+
+            print('\nCalculating smoothened sensitivity maps...')
+            while noiseLevel <= 0.5:
+
+                print('Smoothening sensitivityMap using noiseLevel ' + str(noiseLevel) + '... ')
+
+                #get highest and lowest values for each channel
+                x_max_ch0 = np.max(self.obs_input[:,:,0])
+                x_min_ch0 = np.min(self.obs_input[:,:,0])
+                x_max_ch1 = np.max(self.obs_input[:,:,1])
+                x_min_ch1 = np.min(self.obs_input[:,:,1])
+                x_max_ch2 = np.max(self.obs_input[:,:,2])
+                x_min_ch2 = np.min(self.obs_input[:,:,2])
+
+                #for every channel, calculate the standard deviation that results in the desired noise level
+                stdDev_ch0 = noiseLevel * (x_max_ch0 - x_min_ch0)
+                stdDev_ch1 = noiseLevel * (x_max_ch1 - x_min_ch1)
+                stdDev_ch2 = noiseLevel * (x_max_ch2 - x_min_ch2)
+                    
+
+                try:
+                    os.mkdir(str(self.imageIndex))
+                except:
+                    pass
+
+                try:
+                    os.mkdir(str(self.imageIndex)+'/'+str(noiseLevel))
+                except:
+                    pass
+                
+                
+                if noiseLevel != 0:
+                    #create an array which holds the sum of all sensitivity maps calculated 
+                    accumulator = np.zeros((32,32))
+                    for rep in range(0, reps):
+                        random.seed(datetime.now())
+                        
+                        row,col,ch = self.obs_input.shape
+                        mean = 0
+
+                        #create gaussian noise for every color channel 
+                        gauss_ch0 = np.random.normal(mean,stdDev_ch0,(row,col))
+                        gauss_ch1 = np.random.normal(mean,stdDev_ch1,(row,col))
+                        gauss_ch2 = np.random.normal(mean,stdDev_ch2,(row,col))
+
+                        #combine noise arrays
+                        gauss = np.dstack((gauss_ch0,gauss_ch1,gauss_ch2))
+
+                        #add the noise to the input image
+                        noisy = self.obs_input + gauss
+
+                        #add the sensitivity map to the storage array
+                        accumulator += visualize_saliency(model, vis_layer, seed_input=noisy, filter_indices=None)
+
+
+                    #calculate the average
+                    accumulator /= reps
+
+                    #save the sensitivity map
+                    plt.imshow(accumulator, cmap='gray')
+                    plt.savefig(str(self.imageIndex)+'/'+str(noiseLevel)+'/'+str(epoch)+'saliencyMap_smooth.png')
+                
+                #for better comparison, save the input image in the respective folders
+                if epoch == 0:
+                    plt.imshow(self.obs_input.astype('uint8'))
+                    plt.savefig(str(self.imageIndex)+'/'+str(noiseLevel)+'/inputImage.png')
+
+                #save the unsmoothened sensitivity map
+                originalSaliencyMap = visualize_saliency(model, vis_layer, seed_input=self.obs_input, filter_indices=None)
+                plt.imshow(originalSaliencyMap, cmap='gray')
+                plt.savefig(str(self.imageIndex)+'/'+str(noiseLevel)+'/'+str(epoch)+'saliencyMap.png')
+                noiseLevel += 0.1
+        else:
+            pass
 
 
 def normalize_data(x_train, x_test):
@@ -260,98 +374,114 @@ def normalize_data(x_train, x_test):
     return x_train, x_test
 
 
-#create Video storage class
-video_store=create_Video()
 
-###create the network###
-used_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-training_size = 50000
-test_size = 10000
-num_classes = len(used_labels)
+'''-----------------------------------------------------------------------------'''
+    
 
-#get data
-x_train, y_train, x_test, y_test, class_names = get_dataset( 'cifar10', used_labels, training_size, test_size )
+if __name__ == '__main__':
 
-#normalize data
-x_train, x_test = normalize_data(x_train,x_test)
-#reshape data to fit model
-x_train = x_train.reshape(training_size,32,32,3)
-x_test = x_test.reshape(test_size,32,32,3)
-
-#create model
-transformedImages = get_transformed_Images(x_test)
-a, b ,c = getThreeTransformationsImages(transformedImages)
-#plot the pictures
-"""
-fig, axs = plt.subplots(3,figsize=(10,10))
-axs = axs.ravel()
-
-axs[0].imshow(a,interpolation='none')
-axs[0].set_yticks([])
-axs[0].set_xticks([])
-axs[1].imshow(b, cmap='hsv')
-axs[1].set_yticks([])
-axs[1].set_xticks([])
-axs[2].imshow(c, cmap='hsv')
-axs[2].set_yticks([])
-axs[2].set_xticks([])
-#plt.show()
-"""
-
-model = Sequential()
-if train:
-    #add model layers
-    model.add(Conv2D(32, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
-    model.add(Conv2D(32, (3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    model.add(Conv2D(64, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
-    model.add(Conv2D(64, (3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    model.add(Conv2D(64, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
-    model.add(Conv2D(64, (3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-
-    model.add(Flatten())
-    model.add(Dense(512, activation='relu', name="dense_one"))
-    model.add(Dropout(0.25))
-    model.add(Dense(512, activation='relu', name="dense_two"))
-    model.add(Dropout(0.25))
-    model.add(Dense(512, activation='relu', name="dense_three"))
-    model.add(Dropout(0.25))
-    model.add(Dense(512, activation='relu', name="dense_four"))
-    model.add(Dropout(0.25))
-    model.add(Dense(10, activation='softmax'))
+    trainings = 1
+    for training in range(0, trainings):
+        with tf.Session() as sess:
+            random.seed(datetime.now())
 
 
-    ###train the network or get already learned one from file###
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.tables_initializer())
 
-    call = LossHistory()
-    #compile model using accuracy to measure model performance
-    sgd = optimizers.SGD(lr=0.1, momentum=0.0, nesterov=False)
-    model.compile(optimizer=sgd, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    #train the model
-    model.fit(x_train, y_train, validation_split=0.2, epochs=5, callbacks= [call], verbose = 1)
+            #create Video storage class
+            video_store=create_Video()
 
-    #evaluate the accuracy
-    train_scores = model.evaluate(x_train, y_train, verbose=2)
-    test_scores = model.evaluate(x_test, y_test, verbose=2)
+            ###create the network###
+            used_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+            training_size = 50000
+            test_size = 10000
+            num_classes = len(used_labels)
 
-    #np.save('cifar10Model'+str(test_scores[1])+'.npy',data)
-    model.save('cifar10Model'+str(test_scores[1])+'.h5')
-    print("Finished training with {:4.1f}% training and {:4.1f}% testing accuracy"
-            .format(train_scores[1] * 100, test_scores[1] * 100))
+            #get data
+            x_train, y_train, x_test, y_test, class_names = get_dataset( 'cifar10', used_labels, training_size, test_size )
 
-else:
-    #load model
-    model = load_model('cifar10Model0.6043.h5', custom_objects=None, compile=True)
-    #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
+            #normalize data
+            x_train, x_test = normalize_data(x_train,x_test)
+            #reshape data to fit model
+            x_train = x_train.reshape(training_size,32,32,3)
+            x_test = x_test.reshape(test_size,32,32,3)
 
-print(model.summary())
-video_store.create_Videos()
-#plot_input_layer_FilterWeigths(model,x_test,y_test)
+            #create model
+            transformedImages = get_transformed_Images(x_test)
+            a, b ,c = getThreeTransformationsImages(transformedImages)
+            #plot the pictures
+            """
+            fig, axs = plt.subplots(3,figsize=(10,10))
+            axs = axs.ravel()
+
+            axs[0].imshow(a,interpolation='none')
+            axs[0].set_yticks([])
+            axs[0].set_xticks([])
+            axs[1].imshow(b, cmap='hsv')
+            axs[1].set_yticks([])
+            axs[1].set_xticks([])
+            axs[2].imshow(c, cmap='hsv')
+            axs[2].set_yticks([])
+            axs[2].set_xticks([])
+            #plt.show()
+            """
+
+            model = Sequential()
+            if train:
+                #add model layers
+                model.add(Conv2D(32, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
+                model.add(Conv2D(32, (3, 3), activation='relu'))
+                model.add(MaxPooling2D(pool_size=(2, 2)))
+                model.add(Dropout(0.25))
+
+                model.add(Conv2D(64, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
+                model.add(Conv2D(64, (3, 3), activation='relu'))
+                model.add(MaxPooling2D(pool_size=(2, 2)))
+                model.add(Dropout(0.25))
+
+                model.add(Conv2D(64, (3, 3), padding='same', input_shape = (32, 32, 3), activation = 'relu'))
+                model.add(Conv2D(64, (3, 3), activation='relu'))
+                model.add(MaxPooling2D(pool_size=(2, 2)))
+                model.add(Dropout(0.25))
+
+                model.add(Flatten())
+                model.add(Dense(512, activation='relu', name="dense_one"))
+                model.add(Dropout(0.25))
+                model.add(Dense(512, activation='relu', name="dense_two"))
+                model.add(Dropout(0.25))
+                model.add(Dense(512, activation='relu', name="dense_three"))
+                model.add(Dropout(0.25))
+                model.add(Dense(512, activation='relu', name="dense_four"))
+                model.add(Dropout(0.25))
+                model.add(Dense(10, activation='softmax'))
+
+
+                ###train the network or get already learned one from file###
+
+                call = LossHistory()
+                #compile model using accuracy to measure model performance
+                sgd = optimizers.SGD(lr=0.1, momentum=0.0, nesterov=False)
+                model.compile(optimizer=sgd, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+                #train the model
+                model.fit(x_train, y_train, validation_split=0.2, epochs=5, callbacks= [call], verbose = 1)
+
+                #evaluate the accuracy
+                train_scores = model.evaluate(x_train, y_train, verbose=2)
+                test_scores = model.evaluate(x_test, y_test, verbose=2)
+
+                #np.save('cifar10Model'+str(test_scores[1])+'.npy',data)
+                model.save('cifar10Model'+str(test_scores[1])+'.h5')
+                print("Finished training with {:4.1f}% training and {:4.1f}% testing accuracy"
+                        .format(train_scores[1] * 100, test_scores[1] * 100))
+
+            else:
+                #load model
+                model = load_model('cifar10Model0.6043.h5', custom_objects=None, compile=True)
+                #data= np.load('cifar10Model0.6408.npy',allow_pickle=True).item()
+
+            print(model.summary())
+            video_store.create_Videos()
+            #plot_input_layer_FilterWeigths(model,x_test,y_test)
